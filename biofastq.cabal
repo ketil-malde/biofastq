@@ -1,5 +1,5 @@
 Name:          biofastq
-Version:       0.1
+Version:       0.2
 License:       LGPL
 Cabal-Version: >= 1.6
 Build-Type:    Simple
