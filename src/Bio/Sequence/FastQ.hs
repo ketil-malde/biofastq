@@ -36,18 +36,23 @@ module Bio.Sequence.FastQ
     -- * use Illumina (>v1.3)-style quality information
     , readIllumina, hReadIllumina
     , writeIllumina, hWriteIllumina
+    
+    -- * Sequence data structure
+    , Sequence(..)
     ) where
 
 import System.IO
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Lazy as BB
 import Data.List (unfoldr)
+import Data.Maybe (fromJust)
 import Bio.Core.Sequence
 
-data Sequence = Seq SeqLabel SeqData QualData
+data Sequence = Seq SeqLabel SeqData QualData deriving Show
 
 instance BioSeq Sequence where
-  seqlabel (Seq sl _ _) = sl
+  seqid (Seq sl _ _) = sl
+  seqheader (Seq sl _ _) = sl
   seqdata (Seq _ sd _) = sd  
   seqlength = Offset . B.length . unSD . seqdata -- should be default
   
@@ -96,6 +101,16 @@ parse (h1:sd:h2:sq:rest) =
             -> Just (Right $ Seq (SeqLabel h1name) (SeqData sd) (QualData (BB.map (subtract 33) sq)), rest)
           | otherwise
             -> Just (Left $ "Bio.Sequence.FastQ: name mismatch:" ++ showStanza, rest)
+      (Just ('@',h1name), Just (_,_)) -- not the '+' quality start header
+        -> let ls = (sd:h2:sq:rest)
+               ss = takeWhile (\l -> fst (fromJust (B.uncons l)) /= '+') ls
+               qs = take (length ss) $ drop (length ss+1)     ls
+               rs = drop (length ss*2+1)                      ls
+               s' = B.concat ss
+               q' = B.concat qs
+               in if B.length s' /= B.length q' 
+                  then Just (Left $ "Bio.Sequence.FastQ: lenght of sequence data doesn't match qualdata for "++B.unpack h1name,rs)
+                  else Just (Right $ Seq (SeqLabel h1name) (SeqData s') (QualData (BB.map (subtract 33) q')), rs)
       _     -> Just (Left $ "Bio.Sequence.FastQ: illegal FastQ format:" ++ showStanza, rest)
     where showStanza = unlines $ map B.unpack [ h1, sd, h2, sq ]
 parse [] = Nothing
